@@ -1,0 +1,49 @@
+version: "3.8"
+
+services:
+  # PostgreSQL Database Service
+  postgres:
+    image: postgres:16-alpine
+    container_name: clientops-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-clientops}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-replace-with-a-strong-password}
+      POSTGRES_DB: ${POSTGRES_DB:-clientops_db}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U clientops -d clientops_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ClientOps AI FastAPI Application
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: clientops-app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=production
+      - DATABASE_URL=postgresql://clientops:clientops_secure_pass123@postgres:5432/clientops_db
+      - WATSONX_API_KEY=${WATSONX_API_KEY:-}
+      - WATSONX_PROJECT_ID=${WATSONX_PROJECT_ID:-}
+      - WATSONX_URL=${WATSONX_URL:-https://us-south.ml.cloud.ibm.com}
+      - GRANITE_MODEL_ID=${GRANITE_MODEL_ID:-ibm/granite-3-8b-instruct}
+      - HOST=0.0.0.0
+      - PORT=8000
+    volumes:
+      - ./data:/app/data
+
+volumes:
+  pgdata:
+    driver: local
